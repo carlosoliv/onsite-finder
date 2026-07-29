@@ -61,7 +61,19 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-10">
       <SetupBanner hasKey={hasKey} />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(360px,420px)_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_minmax(360px,420px)]">
+        {/* Results */}
+        <div className="flex flex-col gap-4">
+          {error && (
+            <Alert variant="destructive">
+              <TriangleAlert />
+              <AlertTitle>Search failed</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <ResultsDashboard result={result} loading={loading} />
+        </div>
+
         {/* Configure rail */}
         <div className="flex flex-col gap-4">
           <RosterCard origins={origins} setOrigins={setOrigins} />
@@ -93,18 +105,6 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
               </p>
             )}
           </div>
-        </div>
-
-        {/* Results */}
-        <div className="flex flex-col gap-4">
-          {error && (
-            <Alert variant="destructive">
-              <TriangleAlert />
-              <AlertTitle>Search failed</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <ResultsDashboard result={result} loading={loading} />
         </div>
       </div>
     </div>

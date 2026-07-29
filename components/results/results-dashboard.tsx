@@ -52,7 +52,7 @@ function EmptyState() {
         <div className="grid size-14 place-items-center rounded-2xl bg-accent text-primary">
           <Compass className="size-7" aria-hidden />
         </div>
-        <h3 className="text-lg font-semibold">No results yet</h3>
+        <h3 className="text-lg font-semibold">Make your selections and click &quot;Find OnSite&quot; to start the search!</h3>
         <p className="max-w-xs text-pretty text-sm text-muted-foreground">
           Add your team&apos;s cities and candidate weeks, then run the search to see the cheapest onsite ranked in USD.
         </p>
