@@ -1,6 +1,5 @@
 import "server-only"
 import fxRates from "@/data/fxRates.json"
-import { RANK } from "./policy"
 import type {
   Cabin,
   CityWeekTotal,
@@ -58,18 +57,17 @@ function priceRoute(
 ): PricedRoute | null {
   if (offers.length === 0) return null
 
-  // Cabins we're allowed to consider. allowedCabin never returns above premium
-  // economy, and RANK only maps economy/premium economy, so business/first are
-  // always excluded (capPremiumEconomy is enforced by construction).
+  // The target cabin for this route. allowedCabin returns PREMIUM_ECONOMY only
+  // when long-haul upgrades are enabled AND a segment exceeds the threshold,
+  // otherwise ECONOMY. When a route qualifies for the upgrade we deliberately
+  // book INTO premium economy (the traveler is entitled to it), rather than
+  // letting a cheaper economy fare win a "cheapest across cabins" comparison.
   const cap = allowedCabin(offers, policy)
-  const capRank = RANK[cap]
 
-  let eligible = offers.filter((o) => {
-    const r = RANK[o.cabin as Cabin]
-    return r !== undefined && r <= capRank
-  })
-  if (eligible.length === 0) {
-    // Fall back to economy-only if the allowed cabin had no offers.
+  let eligible = offers.filter((o) => o.cabin === cap)
+  if (eligible.length === 0 && cap !== "ECONOMY") {
+    // Route qualified for the upgrade but the provider returned no offers in the
+    // upgrade cabin; fall back to economy so the route stays routable.
     eligible = offers.filter((o) => o.cabin === "ECONOMY")
   }
   if (eligible.length === 0) return null
