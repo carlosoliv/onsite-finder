@@ -12,7 +12,13 @@ import type {
   SearchResult,
   Week,
 } from "./types"
-import { type FlightOffer, type FlightProvider, getFlightProvider, providerDegraded } from "./flight-provider"
+import {
+  type FlightOffer,
+  type FlightProvider,
+  getFlightProvider,
+  ignavApiCallCount,
+  providerDegraded,
+} from "./flight-provider"
 
 const FX = fxRates as Record<string, number>
 
@@ -269,16 +275,45 @@ export async function runSearch(
 
   const degraded = providerDegraded(provider)
   const winner = totals[0]
+  const elapsedMs = Date.now() - runStart
+  const ignavCalls = ignavApiCallCount(provider)
+  const routableCombos = totals.filter((t) => t.byOrigin.length > 0).length
+  const unroutableOriginLegs = totals.reduce((n, t) => n + t.unroutable.length, 0)
+
+  // End-of-search summary. searchCount is logical route lookups (one per
+  // origin->dest/week pair after the cache); ignavCalls is the true number of
+  // HTTP POSTs to the Ignav API, which is higher because each lookup can fetch
+  // economy + premium economy (+ nonstop-relax retries).
+  console.log("[v0] ===== search summary =====")
   console.log(
-    `[v0] runSearch complete in ${Date.now() - runStart}ms | ${searchCount} live lookups, ${cacheHits} cache hits | degraded=${degraded}`,
+    `[v0] summary | provider=${provider.name} | mode=${
+      usingFixtures ? "fixtures" : degraded ? "live->fixtures (degraded)" : "live"
+    } | elapsed=${(elapsedMs / 1000).toFixed(1)}s`,
+  )
+  console.log(
+    `[v0] summary | inputs: ${origins.length} cities x ${weeks.length} weeks = ${totals.length} city/week combos evaluated`,
+  )
+  console.log(
+    `[v0] summary | lookups: ${searchCount} live route lookups, ${cacheHits} cache hits (${
+      searchCount + cacheHits
+    } total, ${plannedRoutes} planned)`,
+  )
+  console.log(
+    `[v0] summary | Ignav API calls: ${
+      ignavCalls === null ? "0 (no live API used)" : ignavCalls
+    }`,
+  )
+  console.log(
+    `[v0] summary | coverage: ${routableCombos}/${totals.length} combos routable, ${unroutableOriginLegs} unroutable origin legs`,
   )
   if (winner) {
     console.log(
-      `[v0] winner: ${winner.destination} @ $${winner.totalUsd.toLocaleString()} (week ${winner.weekId})`,
+      `[v0] summary | winner: ${winner.destination} @ $${winner.totalUsd.toLocaleString()} (week ${winner.weekId})`,
     )
   } else {
-    console.log(`[v0] no routable city/week combinations found`)
+    console.log(`[v0] summary | winner: none (no routable city/week combinations found)`)
   }
+  console.log("[v0] ===========================")
 
   return {
     totals,
