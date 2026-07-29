@@ -1,7 +1,7 @@
 "use server"
 
 import { runSearch } from "@/lib/algorithm"
-import { hasAmadeusKey } from "@/lib/flight-provider"
+import { hasIgnavKey } from "@/lib/flight-provider"
 import type { OriginRow, PolicyConfig, SearchResult, Week } from "@/lib/types"
 
 export async function searchOnsite(input: {
@@ -16,5 +16,5 @@ export async function searchOnsite(input: {
 }
 
 export async function getKeyStatus(): Promise<{ hasKey: boolean }> {
-  return { hasKey: hasAmadeusKey() }
+  return { hasKey: hasIgnavKey() }
 }
