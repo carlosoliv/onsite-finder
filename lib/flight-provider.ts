@@ -22,6 +22,10 @@ export interface SearchQuery {
   currency: string // origin currency
   preferNonstop: boolean
   excludeRefundable: boolean
+  // Upgrade policy, threaded from PolicyConfig so the provider only spends an
+  // extra request on (or synthesizes) premium economy when policy allows it.
+  longHaulUpgrade: boolean
+  longHaulThresholdHours: number
 }
 
 export interface FlightProvider {
@@ -98,8 +102,11 @@ export class FixtureFlightProvider implements FlightProvider {
         refundable: v.refundable,
       })
     }
-    // Premium economy roughly 2.1x economy, only meaningfully offered on longer routes.
-    if (km > 2500) {
+    // Premium economy roughly 2.1x economy. Mirror the live provider: only
+    // synthesize these offers when the upgrade policy is enabled and the
+    // longest segment crosses the policy threshold, so the cabin exists exactly
+    // when policy could allow it.
+    if (q.longHaulUpgrade && longestSegmentHours > q.longHaulThresholdHours) {
       for (const v of [
         { mult: 2.0, stops: longHaul ? 1 : 0, refundable: false },
         { mult: 2.3, stops: 0, refundable: false },
@@ -258,9 +265,12 @@ export class IgnavFlightProvider implements FlightProvider {
     const economy = await runCabin("economy")
     const offers = economy.map((it) => mapIgnavItinerary(it, q.currency)).filter(Boolean) as FlightOffer[]
 
-    // Only spend an extra request on premium economy for long-haul routes,
-    // where an upgrade policy could actually apply.
-    const longHaul = offers.some((o) => o.longestSegmentHours > 7)
+    // Only spend an extra request on premium economy when the upgrade policy is
+    // enabled AND the route's longest segment actually crosses the policy
+    // threshold. Checking the economy results first means we fetch premium
+    // economy exactly for the routes that could be allowed to use it.
+    const longHaul =
+      q.longHaulUpgrade && offers.some((o) => o.longestSegmentHours > q.longHaulThresholdHours)
     if (longHaul) {
       const premium = await runCabin("premium_economy")
       for (const it of premium) {

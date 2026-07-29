@@ -178,6 +178,8 @@ export async function runSearch(
       currency,
       preferNonstop: policy.preferNonstop,
       excludeRefundable: policy.excludeRefundable,
+      longHaulUpgrade: policy.longHaulUpgrade,
+      longHaulThresholdHours: policy.longHaulThresholdHours,
     })
     console.log(`[v0] [${n}] done ${originAirport}->${destAirport} in ${Date.now() - t0}ms | ${offers.length} offers`)
     cache.set(key, offers)
