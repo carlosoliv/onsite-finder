@@ -116,9 +116,27 @@ export async function runSearch(
   const destinations = origins.map((o) => o.city)
   const cache = new Map<string, FlightOffer[]>()
 
+  // Total origin->dest pairs we may price: for each week, every (dest, origin)
+  // combination where origin != dest. This is the work the user is waiting on.
+  const plannedRoutes = weeks.length * origins.length * (origins.length - 1)
+  console.log(
+    `[v0] runSearch start | provider=${provider.name} usingFixtures=${usingFixtures} | up to ${plannedRoutes} route lookups (before cache)`,
+  )
+  const runStart = Date.now()
+  let searchCount = 0
+  let cacheHits = 0
+
   const search = async (originAirport: string, destAirport: string, w: Week, currency: string) => {
     const key = `${originAirport}-${destAirport}-${w.depart}-${w.return}-${policy.preferNonstop}-${policy.excludeRefundable}-${currency}`
-    if (cache.has(key)) return cache.get(key)!
+    if (cache.has(key)) {
+      cacheHits++
+      console.log(`[v0] cache hit ${originAirport}->${destAirport} ${w.depart} (${cacheHits} hits so far)`)
+      return cache.get(key)!
+    }
+    searchCount++
+    const n = searchCount
+    console.log(`[v0] [${n}] fetch ${originAirport}->${destAirport} ${w.depart}..${w.return} (${currency})`)
+    const t0 = Date.now()
     const offers = await provider.search({
       origin: originAirport,
       dest: destAirport,
@@ -128,13 +146,16 @@ export async function runSearch(
       preferNonstop: policy.preferNonstop,
       excludeRefundable: policy.excludeRefundable,
     })
+    console.log(`[v0] [${n}] done ${originAirport}->${destAirport} in ${Date.now() - t0}ms | ${offers.length} offers`)
     cache.set(key, offers)
     return offers
   }
 
   const totals: CityWeekTotal[] = []
 
-  for (const w of weeks) {
+  for (let wi = 0; wi < weeks.length; wi++) {
+    const w = weeks[wi]
+    console.log(`[v0] === week ${wi + 1}/${weeks.length} (${w.depart}) | ${Date.now() - runStart}ms elapsed ===`)
     const advanceWarning = daysUntil(w.depart) < policy.advancePurchaseDays
     for (const dest of origins) {
       const byOrigin: OriginBreakdown[] = []
@@ -176,12 +197,25 @@ export async function runSearch(
 
   totals.sort((a, b) => a.totalUsd - b.totalUsd)
 
+  const degraded = providerDegraded(provider)
+  const winner = totals[0]
+  console.log(
+    `[v0] runSearch complete in ${Date.now() - runStart}ms | ${searchCount} live lookups, ${cacheHits} cache hits | degraded=${degraded}`,
+  )
+  if (winner) {
+    console.log(
+      `[v0] winner: ${winner.destination} @ $${winner.totalUsd.toLocaleString()} (week ${winner.weekId})`,
+    )
+  } else {
+    console.log(`[v0] no routable city/week combinations found`)
+  }
+
   return {
     totals,
     weeks,
     destinations,
     // Either we never had a key, or the live API was unreachable and we fell back.
-    usingFixtures: usingFixtures || providerDegraded(provider),
+    usingFixtures: usingFixtures || degraded,
     generatedAt: new Date().toISOString(),
   }
 }

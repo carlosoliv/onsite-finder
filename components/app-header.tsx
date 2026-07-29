@@ -9,7 +9,7 @@ export function AppHeader() {
             <Plane className="size-5 -rotate-12" aria-hidden />
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold leading-tight">Onsite Finder</span>
+            <span className="text-sm font-semibold leading-tight">OnSite Finder</span>
             <span className="text-xs text-ink-foreground/70">Cheapest city &amp; week for your team onsite</span>
           </div>
         </div>
