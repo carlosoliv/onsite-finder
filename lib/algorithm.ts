@@ -22,7 +22,7 @@ function fxToUsd(currency: string): number {
 
 function allowedCabin(offers: FlightOffer[], policy: PolicyConfig): Cabin {
   if (!policy.longHaulUpgrade) return "ECONOMY"
-  const longLeg = offers.some((o) => o.blockHoursOneWay > policy.longHaulThresholdHours)
+  const longLeg = offers.some((o) => o.longestSegmentHours > policy.longHaulThresholdHours)
   return longLeg ? "PREMIUM_ECONOMY" : "ECONOMY"
 }
 
@@ -36,7 +36,7 @@ function median(nums: number[]): number {
 interface PricedRoute {
   cabin: Cabin
   stops: number
-  blockHoursOneWay: number
+  longestSegmentHours: number
   nativePrice: number
   nativeCurrency: string
   usdEach: number
@@ -99,7 +99,7 @@ function priceRoute(
   return {
     cabin: best.cabin as Cabin,
     stops: best.stops,
-    blockHoursOneWay: best.blockHoursOneWay,
+    longestSegmentHours: best.longestSegmentHours,
     nativePrice: Math.round(best.price * 100) / 100,
     nativeCurrency: currency,
     usdEach: Math.round(usdEach),

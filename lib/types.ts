@@ -44,7 +44,7 @@ export interface FareResult {
   weekId: string
   cabin: Cabin
   stops: number
-  blockHoursOneWay: number
+  longestSegmentHours: number
   nativePrice: number
   nativeCurrency: string
   usdPrice: number
