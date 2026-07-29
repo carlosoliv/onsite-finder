@@ -44,7 +44,7 @@ export interface FareResult {
   weekId: string
   cabin: Cabin
   stops: number
-  blockHoursOneWay: number
+  longestSegmentHours: number
   nativePrice: number
   nativeCurrency: string
   usdPrice: number
@@ -86,3 +86,34 @@ export interface SearchResult {
   usingFixtures: boolean
   generatedAt: string
 }
+
+// A single origin->destination lookup for a given week that the search will price.
+export interface PlannedRoute {
+  origin: string
+  originAirport: string
+  destination: string
+  destAirport: string
+  weekId: string
+  weekLabel: string
+}
+
+// Streamed while a search runs so the UI can show progress in real time.
+export type SearchProgressEvent =
+  | { type: "start"; total: number; routes: PlannedRoute[] }
+  | {
+      type: "route"
+      index: number // 1-based position within the planned routes
+      status: "fetching" | "done"
+      origin: string
+      originAirport: string
+      destination: string
+      destAirport: string
+      weekId: string
+      weekLabel: string
+      cached?: boolean
+      offers?: number
+      routable?: boolean
+      cheapestUsdEach?: number | null
+    }
+  | { type: "result"; result: SearchResult }
+  | { type: "error"; message: string }

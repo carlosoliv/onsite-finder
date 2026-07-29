@@ -10,7 +10,7 @@ export interface FlightOffer {
   price: number // native currency (origin currency)
   currency: string
   stops: number
-  blockHoursOneWay: number // longest single segment, hours
+  longestSegmentHours: number // longest single segment, hours
   refundable: boolean
 }
 
@@ -22,6 +22,10 @@ export interface SearchQuery {
   currency: string // origin currency
   preferNonstop: boolean
   excludeRefundable: boolean
+  // Upgrade policy, threaded from PolicyConfig so the provider only spends an
+  // extra request on (or synthesizes) premium economy when policy allows it.
+  longHaulUpgrade: boolean
+  longHaulThresholdHours: number
 }
 
 export interface FlightProvider {
@@ -68,8 +72,8 @@ export class FixtureFlightProvider implements FlightProvider {
 
     const km = haversineKm(o, d)
     // block hours for a single (longest) segment, ~800 km/h + fixed overhead
-    const blockHoursOneWay = Math.round((km / 820 + 1.4) * 10) / 10
-    const longHaul = blockHoursOneWay > 8
+    const longestSegmentHours = Math.round((km / 820 + 1.4) * 10) / 10
+    const longHaul = longestSegmentHours > 8
 
     // USD baseline fare then convert to origin currency at the end of algorithm.
     // Here we price directly in the origin currency for realism.
@@ -94,12 +98,15 @@ export class FixtureFlightProvider implements FlightProvider {
         price: toNative(baseUsd * v.mult),
         currency: q.currency,
         stops: v.stops,
-        blockHoursOneWay,
+        longestSegmentHours,
         refundable: v.refundable,
       })
     }
-    // Premium economy roughly 2.1x economy, only meaningfully offered on longer routes.
-    if (km > 2500) {
+    // Premium economy roughly 2.1x economy. Mirror the live provider: only
+    // synthesize these offers when the upgrade policy is enabled and the
+    // longest segment crosses the policy threshold, so the cabin exists exactly
+    // when policy could allow it.
+    if (q.longHaulUpgrade && longestSegmentHours > q.longHaulThresholdHours) {
       for (const v of [
         { mult: 2.0, stops: longHaul ? 1 : 0, refundable: false },
         { mult: 2.3, stops: 0, refundable: false },
@@ -110,7 +117,7 @@ export class FixtureFlightProvider implements FlightProvider {
           price: toNative(baseUsd * v.mult),
           currency: q.currency,
           stops: v.stops,
-          blockHoursOneWay,
+          longestSegmentHours,
           refundable: v.refundable,
         })
       }
@@ -121,7 +128,7 @@ export class FixtureFlightProvider implements FlightProvider {
       price: toNative(baseUsd * 4.5),
       currency: q.currency,
       stops: 0,
-      blockHoursOneWay,
+      longestSegmentHours,
       refundable: true,
     })
 
@@ -258,9 +265,12 @@ export class IgnavFlightProvider implements FlightProvider {
     const economy = await runCabin("economy")
     const offers = economy.map((it) => mapIgnavItinerary(it, q.currency)).filter(Boolean) as FlightOffer[]
 
-    // Only spend an extra request on premium economy for long-haul routes,
-    // where an upgrade policy could actually apply.
-    const longHaul = offers.some((o) => o.blockHoursOneWay > 7)
+    // Only spend an extra request on premium economy when the upgrade policy is
+    // enabled AND the route's longest segment actually crosses the policy
+    // threshold. Checking the economy results first means we fetch premium
+    // economy exactly for the routes that could be allowed to use it.
+    const longHaul =
+      q.longHaulUpgrade && offers.some((o) => o.longestSegmentHours > q.longHaulThresholdHours)
     if (longHaul) {
       const premium = await runCabin("premium_economy")
       for (const it of premium) {
@@ -301,10 +311,10 @@ function mapIgnavItinerary(it: any, expectedCurrency: string): FlightOffer | nul
     const legs = [it.outbound, it.inbound].filter(Boolean)
     if (legs.length === 0) return null
     let stops = 0
-    let blockHoursOneWay = 0
+    let longestSegmentHours = 0
     for (const leg of legs) {
       stops = Math.max(stops, ignavLegStops(leg))
-      blockHoursOneWay = Math.max(blockHoursOneWay, ignavLegLongestSegmentHours(leg))
+      longestSegmentHours = Math.max(longestSegmentHours, ignavLegLongestSegmentHours(leg))
     }
     const amount = Number(it.price?.amount ?? 0)
     const responseCurrency = String(it.price?.currency ?? expectedCurrency)
@@ -314,7 +324,7 @@ function mapIgnavItinerary(it: any, expectedCurrency: string): FlightOffer | nul
       price: Math.round(price * 100) / 100,
       currency: expectedCurrency,
       stops,
-      blockHoursOneWay: Math.round(blockHoursOneWay * 10) / 10,
+      longestSegmentHours: Math.round(longestSegmentHours * 10) / 10,
       // Ignav does not expose refundability; published fares are treated as non-refundable.
       refundable: false,
     }

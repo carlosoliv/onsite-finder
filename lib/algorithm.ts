@@ -1,7 +1,17 @@
 import "server-only"
 import fxRates from "@/data/fxRates.json"
 import { RANK } from "./policy"
-import type { Cabin, CityWeekTotal, OriginBreakdown, OriginRow, PolicyConfig, SearchResult, Week } from "./types"
+import type {
+  Cabin,
+  CityWeekTotal,
+  OriginBreakdown,
+  OriginRow,
+  PlannedRoute,
+  PolicyConfig,
+  SearchProgressEvent,
+  SearchResult,
+  Week,
+} from "./types"
 import { type FlightOffer, type FlightProvider, getFlightProvider, providerDegraded } from "./flight-provider"
 
 const FX = fxRates as Record<string, number>
@@ -12,7 +22,7 @@ function fxToUsd(currency: string): number {
 
 function allowedCabin(offers: FlightOffer[], policy: PolicyConfig): Cabin {
   if (!policy.longHaulUpgrade) return "ECONOMY"
-  const longLeg = offers.some((o) => o.blockHoursOneWay > policy.longHaulThresholdHours)
+  const longLeg = offers.some((o) => o.longestSegmentHours > policy.longHaulThresholdHours)
   return longLeg ? "PREMIUM_ECONOMY" : "ECONOMY"
 }
 
@@ -26,7 +36,7 @@ function median(nums: number[]): number {
 interface PricedRoute {
   cabin: Cabin
   stops: number
-  blockHoursOneWay: number
+  longestSegmentHours: number
   nativePrice: number
   nativeCurrency: string
   usdEach: number
@@ -89,7 +99,7 @@ function priceRoute(
   return {
     cabin: best.cabin as Cabin,
     stops: best.stops,
-    blockHoursOneWay: best.blockHoursOneWay,
+    longestSegmentHours: best.longestSegmentHours,
     nativePrice: Math.round(best.price * 100) / 100,
     nativeCurrency: currency,
     usdEach: Math.round(usdEach),
@@ -107,8 +117,13 @@ export async function runSearch(
   origins: OriginRow[],
   weeks: Week[],
   policy: PolicyConfig,
-  providerOverride?: FlightProvider,
+  options?: {
+    providerOverride?: FlightProvider
+    onProgress?: (event: SearchProgressEvent) => void
+  },
 ): Promise<SearchResult> {
+  const providerOverride = options?.providerOverride
+  const onProgress = options?.onProgress
   const { provider, usingFixtures } = providerOverride
     ? { provider: providerOverride, usingFixtures: providerOverride.name === "fixtures" }
     : getFlightProvider()
@@ -116,12 +131,30 @@ export async function runSearch(
   const destinations = origins.map((o) => o.city)
   const cache = new Map<string, FlightOffer[]>()
 
-  // Total origin->dest pairs we may price: for each week, every (dest, origin)
-  // combination where origin != dest. This is the work the user is waiting on.
-  const plannedRoutes = weeks.length * origins.length * (origins.length - 1)
+  // Build the ordered list of origin->dest lookups (per week, skipping same-city)
+  // up front so the UI can render the full plan before any pricing happens. This
+  // matches the iteration order of the pricing loops below exactly.
+  const plannedRouteList: PlannedRoute[] = []
+  for (const w of weeks) {
+    for (const dest of origins) {
+      for (const origin of origins) {
+        if (origin.city === dest.city) continue
+        plannedRouteList.push({
+          origin: origin.city,
+          originAirport: origin.airport,
+          destination: dest.city,
+          destAirport: dest.airport,
+          weekId: w.id,
+          weekLabel: w.label,
+        })
+      }
+    }
+  }
+  const plannedRoutes = plannedRouteList.length
   console.log(
     `[v0] runSearch start | provider=${provider.name} usingFixtures=${usingFixtures} | up to ${plannedRoutes} route lookups (before cache)`,
   )
+  onProgress?.({ type: "start", total: plannedRoutes, routes: plannedRouteList })
   const runStart = Date.now()
   let searchCount = 0
   let cacheHits = 0
@@ -145,6 +178,8 @@ export async function runSearch(
       currency,
       preferNonstop: policy.preferNonstop,
       excludeRefundable: policy.excludeRefundable,
+      longHaulUpgrade: policy.longHaulUpgrade,
+      longHaulThresholdHours: policy.longHaulThresholdHours,
     })
     console.log(`[v0] [${n}] done ${originAirport}->${destAirport} in ${Date.now() - t0}ms | ${offers.length} offers`)
     cache.set(key, offers)
@@ -152,6 +187,7 @@ export async function runSearch(
   }
 
   const totals: CityWeekTotal[] = []
+  let routeIndex = 0
 
   for (let wi = 0; wi < weeks.length; wi++) {
     const w = weeks[wi]
@@ -164,8 +200,42 @@ export async function runSearch(
 
       for (const origin of origins) {
         if (origin.city === dest.city) continue // already based there -> $0
+        routeIndex++
+        const cached = cache.has(
+          `${origin.airport}-${dest.airport}-${w.depart}-${w.return}-${policy.preferNonstop}-${policy.excludeRefundable}-${origin.currency}`,
+        )
+        onProgress?.({
+          type: "route",
+          index: routeIndex,
+          status: "fetching",
+          origin: origin.city,
+          originAirport: origin.airport,
+          destination: dest.city,
+          destAirport: dest.airport,
+          weekId: w.id,
+          weekLabel: w.label,
+          cached,
+        })
         const offers = await search(origin.airport, dest.airport, w, origin.currency)
+        // In demo/fixture mode lookups resolve instantly; add a small pause so the
+        // live progress feed is actually perceivable. No effect on the live API path.
+        if (usingFixtures && !cached) await new Promise((r) => setTimeout(r, 70))
         const priced = priceRoute(offers, origin.currency, policy, advanceWarning)
+        onProgress?.({
+          type: "route",
+          index: routeIndex,
+          status: "done",
+          origin: origin.city,
+          originAirport: origin.airport,
+          destination: dest.city,
+          destAirport: dest.airport,
+          weekId: w.id,
+          weekLabel: w.label,
+          cached,
+          offers: offers.length,
+          routable: Boolean(priced),
+          cheapestUsdEach: priced ? priced.usdEach : null,
+        })
         if (!priced) {
           unroutable.push(origin.city)
           continue

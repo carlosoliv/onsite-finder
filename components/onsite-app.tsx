@@ -10,10 +10,13 @@ import { WeeksCard, weekFromDate } from "@/components/weeks-card"
 import { RulesCard } from "@/components/rules-card"
 import { SetupBanner } from "@/components/setup-banner"
 import { ResultsDashboard } from "@/components/results/results-dashboard"
-import { searchOnsite } from "@/app/actions"
+import { SearchProgress, type RouteActivity, type SearchProgressState } from "@/components/results/search-progress"
+import { streamSearch } from "@/lib/search-client"
 import { DEFAULT_POLICY } from "@/lib/policy"
 import { findCity } from "@/lib/cities"
 import type { OriginRow, PolicyConfig, SearchResult, Week } from "@/lib/types"
+
+const EMPTY_PROGRESS: SearchProgressState = { total: 0, done: 0, current: null, feed: [] }
 
 function seedRows(): OriginRow[] {
   return [
@@ -38,6 +41,7 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
   const [result, setResult] = useState<SearchResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<SearchProgressState>(EMPTY_PROGRESS)
 
   const validOrigins = useMemo(() => origins.filter((o) => o.airport && o.count > 0), [origins])
   const canSearch = validOrigins.length >= 2 && weeks.length >= 1
@@ -46,9 +50,45 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
     if (!canSearch || loading) return
     setLoading(true)
     setError(null)
+    setResult(null)
+    setProgress(EMPTY_PROGRESS)
+
     try {
-      const res = await searchOnsite({ origins: validOrigins, weeks, policy })
-      setResult(res)
+      await streamSearch({ origins: validOrigins, weeks, policy }, (event) => {
+        if (event.type === "start") {
+          setProgress({ total: event.total, done: 0, current: null, feed: [] })
+        } else if (event.type === "route") {
+          const activity: RouteActivity = {
+            index: event.index,
+            origin: event.origin,
+            originAirport: event.originAirport,
+            destination: event.destination,
+            destAirport: event.destAirport,
+            weekLabel: event.weekLabel,
+            status: event.status,
+            cached: event.cached,
+            routable: event.routable,
+            cheapestUsdEach: event.cheapestUsdEach,
+          }
+          setProgress((prev) => {
+            if (event.status === "fetching") {
+              return { ...prev, current: activity }
+            }
+            // done: bump the counter and prepend to the feed
+            return {
+              ...prev,
+              done: Math.max(prev.done, event.index),
+              current: prev.current?.index === event.index ? null : prev.current,
+              feed: [activity, ...prev.feed],
+            }
+          })
+        } else if (event.type === "result") {
+          setResult(event.result)
+        } else if (event.type === "error") {
+          setError(event.message)
+          setResult(null)
+        }
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.")
       setResult(null)
@@ -104,7 +144,11 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-          <ResultsDashboard result={result} loading={loading} />
+          {loading ? (
+            <SearchProgress state={progress} />
+          ) : (
+            <ResultsDashboard result={result} loading={false} />
+          )}
         </div>
       </div>
     </div>
