@@ -63,6 +63,7 @@ export interface OriginBreakdown {
   nativePrice: number
   nativeCurrency: string
   flags: string[]
+  longHaul: boolean // longest segment exceeds the policy long-haul threshold
 }
 
 export interface CityWeekTotal {

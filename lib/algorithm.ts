@@ -258,6 +258,7 @@ export async function runSearch(
           nativePrice: priced.nativePrice,
           nativeCurrency: priced.nativeCurrency,
           flags: priced.flags,
+          longHaul: priced.longestSegmentHours > policy.longHaulThresholdHours,
         })
       }
 
