@@ -196,12 +196,17 @@ const CABIN_FROM_IGNAV: Record<string, FlightOffer["cabin"]> = {
 export class IgnavFlightProvider implements FlightProvider {
   readonly name = "ignav"
   private apiKey: string
+  // Number of actual HTTP POSTs made to the Ignav API over this provider's
+  // lifetime. A single search() can trigger several (economy, premium economy,
+  // and nonstop-relax retries), so this is the true API-call count.
+  apiCallCount = 0
 
   constructor(apiKey: string) {
     this.apiKey = apiKey
   }
 
   private async roundTrip(body: Record<string, unknown>): Promise<any> {
+    this.apiCallCount++
     const label = `${body.origin}->${body.destination} ${body.cabin_class} ${body.departure_date}`
     console.log(`[v0] ignav POST /fares/round-trip | ${label}`)
     const t0 = Date.now()
@@ -368,6 +373,12 @@ class ResilientFlightProvider implements FlightProvider {
     return this.liveDown
   }
 
+  // Surface the underlying live provider so callers can read provider-specific
+  // metrics (e.g. Ignav's HTTP call count) without knowing the wrapper exists.
+  get liveProvider(): FlightProvider {
+    return this.live
+  }
+
   static is(p: unknown): p is ResilientFlightProvider {
     return p instanceof ResilientFlightProvider
   }
@@ -405,4 +416,12 @@ export function hasIgnavKey(): boolean {
 // True if a resilient provider fell back to fixtures during the run.
 export function providerDegraded(p: FlightProvider): boolean {
   return ResilientFlightProvider.is(p) && p.degraded
+}
+
+// Number of real HTTP calls made to the Ignav API by this provider, or null
+// when no Ignav provider is involved (e.g. pure fixtures). Unwraps the
+// resilient wrapper if present.
+export function ignavApiCallCount(p: FlightProvider): number | null {
+  const target = ResilientFlightProvider.is(p) ? p.liveProvider : p
+  return target instanceof IgnavFlightProvider ? target.apiCallCount : null
 }

@@ -107,6 +107,11 @@ export function RankedList({
                               <TableCell className="text-right font-semibold tnums">{formatUsd(b.usdSubtotal)}</TableCell>
                               <TableCell>
                                 <div className="flex flex-wrap gap-1">
+                                  {b.longHaul && (
+                                    <Badge variant="default" className="text-[10px]">
+                                      long-haul
+                                    </Badge>
+                                  )}
                                   {b.flags.map((f) => (
                                     <Badge key={f} variant={flagVariant(f)} className="text-[10px]">
                                       {f}
