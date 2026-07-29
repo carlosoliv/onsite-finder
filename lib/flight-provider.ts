@@ -195,14 +195,25 @@ export class IgnavFlightProvider implements FlightProvider {
   }
 
   private async roundTrip(body: Record<string, unknown>): Promise<any> {
-    const res = await fetch(`${IGNAV_BASE}/fares/round-trip`, {
-      method: "POST",
-      headers: {
-        "X-Api-Key": this.apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    })
+    const label = `${body.origin}->${body.destination} ${body.cabin_class} ${body.departure_date}`
+    console.log(`[v0] ignav POST /fares/round-trip | ${label}`)
+    const t0 = Date.now()
+    let res: Response
+    try {
+      res = await fetch(`${IGNAV_BASE}/fares/round-trip`, {
+        method: "POST",
+        headers: {
+          "X-Api-Key": this.apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      })
+    } catch (err) {
+      // Network-level failure (DNS, timeout, connection refused).
+      console.log(`[v0] ignav NETWORK ERROR after ${Date.now() - t0}ms | ${label} |`, (err as Error)?.message)
+      throw err
+    }
+    const ms = Date.now() - t0
     if (!res.ok) {
       let detail = ""
       try {
@@ -211,9 +222,12 @@ export class IgnavFlightProvider implements FlightProvider {
       } catch {
         // non-JSON error body; ignore
       }
+      console.log(`[v0] ignav HTTP ${res.status} after ${ms}ms | ${label} | ${detail}`)
       throw new Error(`Ignav search failed: ${res.status}${detail ? ` ${detail}` : ""}`)
     }
-    return res.json()
+    const json = await res.json()
+    console.log(`[v0] ignav 200 in ${ms}ms | ${label} | ${json?.itineraries?.length ?? 0} itineraries`)
+    return json
   }
 
   async search(q: SearchQuery): Promise<FlightOffer[]> {
@@ -349,12 +363,18 @@ class ResilientFlightProvider implements FlightProvider {
   }
 
   async search(q: SearchQuery): Promise<FlightOffer[]> {
-    if (this.liveDown) return this.fallback.search(q)
+    if (this.liveDown) {
+      // Already degraded earlier this run; skip the live call entirely.
+      return this.fallback.search(q)
+    }
     try {
       return await this.live.search(q)
     } catch (err) {
       this.liveDown = true
-      console.log("[v0] live flight provider unreachable, using fixtures:", (err as Error)?.message)
+      console.log(
+        `[v0] live provider "${this.live.name}" FAILED, falling back to fixtures for the rest of this run:`,
+        (err as Error)?.message,
+      )
       return this.fallback.search(q)
     }
   }
