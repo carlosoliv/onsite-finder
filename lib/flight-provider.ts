@@ -259,16 +259,60 @@ function mapAmadeusOffer(offer: any, currency: string): FlightOffer | null {
 /* Factory                                                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Wraps a live provider so that any network/API failure transparently falls
+ * back to deterministic fixtures instead of crashing the whole search. This
+ * keeps the app usable in environments without outbound network access to the
+ * flight API (e.g. sandboxes) while still preferring real data when reachable.
+ */
+class ResilientFlightProvider implements FlightProvider {
+  readonly name: string
+  private live: FlightProvider
+  private fallback: FixtureFlightProvider
+  // Once the live API is proven unreachable, stop retrying for this request cycle.
+  private liveDown = false
+
+  constructor(live: FlightProvider) {
+    this.live = live
+    this.fallback = new FixtureFlightProvider()
+    this.name = live.name
+  }
+
+  get degraded(): boolean {
+    return this.liveDown
+  }
+
+  static is(p: unknown): p is ResilientFlightProvider {
+    return p instanceof ResilientFlightProvider
+  }
+
+  async search(q: SearchQuery): Promise<FlightOffer[]> {
+    if (this.liveDown) return this.fallback.search(q)
+    try {
+      return await this.live.search(q)
+    } catch (err) {
+      this.liveDown = true
+      console.log("[v0] live flight provider unreachable, using fixtures:", (err as Error)?.message)
+      return this.fallback.search(q)
+    }
+  }
+}
+
 export function getFlightProvider(): { provider: FlightProvider; usingFixtures: boolean } {
   const id = process.env.AMADEUS_CLIENT_ID
   const secret = process.env.AMADEUS_CLIENT_SECRET
   const env = process.env.AMADEUS_ENV ?? "test"
   if (id && secret) {
-    return { provider: new AmadeusFlightProvider(id, secret, env), usingFixtures: false }
+    return { provider: new ResilientFlightProvider(new AmadeusFlightProvider(id, secret, env)), usingFixtures: false }
   }
   return { provider: new FixtureFlightProvider(), usingFixtures: true }
 }
 
 export function hasAmadeusKey(): boolean {
   return Boolean(process.env.AMADEUS_CLIENT_ID && process.env.AMADEUS_CLIENT_SECRET)
+}
+
+// True if a resilient provider fell back to fixtures during the run.
+export function providerDegraded(p: FlightProvider): boolean {
+  return ResilientFlightProvider.is(p) && p.degraded
 }

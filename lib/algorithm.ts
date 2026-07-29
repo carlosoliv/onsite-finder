@@ -2,7 +2,7 @@ import "server-only"
 import fxRates from "@/data/fxRates.json"
 import { RANK } from "./policy"
 import type { Cabin, CityWeekTotal, OriginBreakdown, OriginRow, PolicyConfig, SearchResult, Week } from "./types"
-import { type FlightOffer, type FlightProvider, getFlightProvider } from "./flight-provider"
+import { type FlightOffer, type FlightProvider, getFlightProvider, providerDegraded } from "./flight-provider"
 
 const FX = fxRates as Record<string, number>
 
@@ -180,7 +180,8 @@ export async function runSearch(
     totals,
     weeks,
     destinations,
-    usingFixtures,
+    // Either we never had a key, or the live API was unreachable and we fell back.
+    usingFixtures: usingFixtures || providerDegraded(provider),
     generatedAt: new Date().toISOString(),
   }
 }
