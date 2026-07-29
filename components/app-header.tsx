@@ -14,12 +14,12 @@ export function AppHeader() {
           </div>
         </div>
         <a
-          href="https://developers.amadeus.com/self-service/category/flights/api-doc/flight-offers-search"
+          href="https://ignav.com/docs"
           target="_blank"
           rel="noopener noreferrer"
           className="hidden text-xs text-ink-foreground/80 underline-offset-4 hover:underline sm:block"
         >
-          Powered by Amadeus Flight Offers
+          Powered by Ignav Flight API
         </a>
       </div>
     </header>

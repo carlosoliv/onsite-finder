@@ -55,7 +55,7 @@ function seeded(seed: string): number {
 
 /* ------------------------------------------------------------------ */
 /* Fixture provider — deterministic synthetic offers for UI/dev work.  */
-/* Not a pricing engine; used only until a live Amadeus key is added.  */
+/* Not a pricing engine; used only until a live Ignav key is added.   */
 /* ------------------------------------------------------------------ */
 
 export class FixtureFlightProvider implements FlightProvider {
@@ -154,105 +154,167 @@ const FX: Record<string, number> = {
 }
 
 /* ------------------------------------------------------------------ */
-/* Amadeus provider — real API, called server-side.                   */
+/* Ignav provider — real API, called server-side.                     */
+/* Docs: https://ignav.com/docs   (base https://ignav.com/api)         */
+/* Auth: X-Api-Key header. Round-trip fares via POST /fares/round-trip.*/
 /* ------------------------------------------------------------------ */
 
-interface TokenCache {
-  token: string
-  expiresAt: number
+const IGNAV_BASE = "https://ignav.com/api"
+
+// Ignav uses a 2-letter market (country) code to decide currency + locale.
+// Map each origin currency to a representative market, then normalize the
+// returned fare back into the origin currency below.
+const CURRENCY_TO_MARKET: Record<string, string> = {
+  USD: "US",
+  EUR: "DE",
+  GBP: "GB",
+  CAD: "CA",
+  SGD: "SG",
+  JPY: "JP",
+  AUD: "AU",
+  INR: "IN",
+  BRL: "BR",
+  AED: "AE",
 }
-let tokenCache: TokenCache | null = null
 
-export class AmadeusFlightProvider implements FlightProvider {
-  readonly name = "amadeus"
-  private clientId: string
-  private clientSecret: string
-  private baseUrl: string
+type IgnavCabin = "economy" | "premium_economy" | "business" | "first"
 
-  constructor(clientId: string, clientSecret: string, env: string) {
-    this.clientId = clientId
-    this.clientSecret = clientSecret
-    this.baseUrl = env === "production" ? "https://api.amadeus.com" : "https://test.api.amadeus.com"
+const CABIN_FROM_IGNAV: Record<string, FlightOffer["cabin"]> = {
+  economy: "ECONOMY",
+  premium_economy: "PREMIUM_ECONOMY",
+  business: "BUSINESS",
+  first: "FIRST",
+}
+
+export class IgnavFlightProvider implements FlightProvider {
+  readonly name = "ignav"
+  private apiKey: string
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey
   }
 
-  private async token(): Promise<string> {
-    if (tokenCache && tokenCache.expiresAt > Date.now() + 30_000) return tokenCache.token
-    const res = await fetch(`${this.baseUrl}/v1/security/oauth2/token`, {
+  private async roundTrip(body: Record<string, unknown>): Promise<any> {
+    const res = await fetch(`${IGNAV_BASE}/fares/round-trip`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-      }),
+      headers: {
+        "X-Api-Key": this.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error(`Amadeus auth failed: ${res.status}`)
-    const json = await res.json()
-    tokenCache = { token: json.access_token, expiresAt: Date.now() + json.expires_in * 1000 }
-    return tokenCache.token
+    if (!res.ok) {
+      let detail = ""
+      try {
+        const j = await res.json()
+        detail = j?.error?.message ?? ""
+      } catch {
+        // non-JSON error body; ignore
+      }
+      throw new Error(`Ignav search failed: ${res.status}${detail ? ` ${detail}` : ""}`)
+    }
+    return res.json()
   }
 
   async search(q: SearchQuery): Promise<FlightOffer[]> {
-    const token = await this.token()
-    const run = async (nonStop: boolean) => {
-      const params = new URLSearchParams({
-        originLocationCode: q.origin,
-        destinationLocationCode: q.dest,
-        departureDate: q.depart,
-        returnDate: q.ret,
-        adults: "1",
-        currencyCode: q.currency,
-        max: "20",
-      })
-      if (nonStop) params.set("nonStop", "true")
-      const res = await fetch(`${this.baseUrl}/v2/shopping/flight-offers?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error(`Amadeus search failed: ${res.status}`)
-      return res.json()
+    const market = CURRENCY_TO_MARKET[q.currency] ?? "US"
+    const base = {
+      origin: q.origin,
+      destination: q.dest,
+      departure_date: q.depart,
+      return_date: q.ret,
+      adults: 1,
+      market,
     }
 
-    let json = await run(q.preferNonstop)
-    if (q.preferNonstop && (!json.data || json.data.length === 0)) {
-      json = await run(false)
+    const runCabin = async (cabin: IgnavCabin): Promise<any[]> => {
+      const body: Record<string, unknown> = { ...base, cabin_class: cabin }
+      if (q.preferNonstop) body.max_stops = 0
+      let json = await this.roundTrip(body)
+      let itineraries: any[] = json.itineraries ?? []
+      // Nonstop can return nothing on some routes; relax the filter and retry.
+      if (q.preferNonstop && itineraries.length === 0) {
+        delete body.max_stops
+        json = await this.roundTrip(body)
+        itineraries = json.itineraries ?? []
+      }
+      return itineraries
     }
-    const data = json.data ?? []
-    return data.map((offer: any) => mapAmadeusOffer(offer, q.currency)).filter(Boolean) as FlightOffer[]
+
+    const economy = await runCabin("economy")
+    const offers = economy.map((it) => mapIgnavItinerary(it, q.currency)).filter(Boolean) as FlightOffer[]
+
+    // Only spend an extra request on premium economy for long-haul routes,
+    // where an upgrade policy could actually apply.
+    const longHaul = offers.some((o) => o.blockHoursOneWay > 7)
+    if (longHaul) {
+      const premium = await runCabin("premium_economy")
+      for (const it of premium) {
+        const m = mapIgnavItinerary(it, q.currency)
+        if (m) offers.push(m)
+      }
+    }
+
+    let result = offers
+    if (q.excludeRefundable) {
+      const nonRef = result.filter((f) => !f.refundable)
+      if (nonRef.length > 0) result = nonRef
+    }
+    return result
   }
 }
 
-function isoDurationToHours(iso: string): number {
-  const m = /PT(?:(\d+)H)?(?:(\d+)M)?/.exec(iso || "")
-  if (!m) return 0
-  const h = Number(m[1] || 0)
-  const min = Number(m[2] || 0)
-  return h + min / 60
+function ignavLegStops(leg: any): number {
+  const segs = leg?.segments ?? []
+  return Math.max(0, segs.length - 1)
 }
 
-function mapAmadeusOffer(offer: any, currency: string): FlightOffer | null {
+// Longest single segment (in hours) within a leg, falling back to the leg total.
+function ignavLegLongestSegmentHours(leg: any): number {
+  const segs = leg?.segments ?? []
+  let maxMin = 0
+  for (const s of segs) {
+    const d = Number(s?.duration_minutes ?? 0)
+    if (d > maxMin) maxMin = d
+  }
+  if (maxMin === 0) maxMin = Number(leg?.duration_minutes ?? 0)
+  return maxMin / 60
+}
+
+function mapIgnavItinerary(it: any, expectedCurrency: string): FlightOffer | null {
   try {
-    const cabin = (offer.travelerPricings?.[0]?.fareDetailsBySegment?.[0]?.cabin ?? "ECONOMY") as FlightOffer["cabin"]
-    const itins = offer.itineraries ?? []
-    let maxStops = 0
-    let maxSeg = 0
-    for (const it of itins) {
-      const segs = it.segments ?? []
-      maxStops = Math.max(maxStops, segs.length - 1)
-      for (const s of segs) maxSeg = Math.max(maxSeg, isoDurationToHours(s.duration))
+    const cabin = CABIN_FROM_IGNAV[String(it.cabin_class ?? "economy")] ?? "ECONOMY"
+    const legs = [it.outbound, it.inbound].filter(Boolean)
+    if (legs.length === 0) return null
+    let stops = 0
+    let blockHoursOneWay = 0
+    for (const leg of legs) {
+      stops = Math.max(stops, ignavLegStops(leg))
+      blockHoursOneWay = Math.max(blockHoursOneWay, ignavLegLongestSegmentHours(leg))
     }
-    const price = Number(offer.price?.grandTotal ?? offer.price?.total ?? 0)
-    const refundable = offer.pricingOptions?.refundableFare === true
+    const amount = Number(it.price?.amount ?? 0)
+    const responseCurrency = String(it.price?.currency ?? expectedCurrency)
+    const price = convertCurrency(amount, responseCurrency, expectedCurrency)
     return {
       cabin,
-      price,
-      currency: offer.price?.currency ?? currency,
-      stops: maxStops,
-      blockHoursOneWay: Math.round(maxSeg * 10) / 10,
-      refundable,
+      price: Math.round(price * 100) / 100,
+      currency: expectedCurrency,
+      stops,
+      blockHoursOneWay: Math.round(blockHoursOneWay * 10) / 10,
+      // Ignav does not expose refundability; published fares are treated as non-refundable.
+      refundable: false,
     }
   } catch {
     return null
   }
+}
+
+// Convert an amount between currencies using the local USD-multiplier FX table.
+function convertCurrency(amount: number, from: string, to: string): number {
+  if (from === to) return amount
+  const fromUsd = FX[from] ?? 1
+  const toUsd = FX[to] ?? 1
+  return (amount * fromUsd) / toUsd
 }
 
 /* ------------------------------------------------------------------ */
@@ -299,17 +361,15 @@ class ResilientFlightProvider implements FlightProvider {
 }
 
 export function getFlightProvider(): { provider: FlightProvider; usingFixtures: boolean } {
-  const id = process.env.AMADEUS_CLIENT_ID
-  const secret = process.env.AMADEUS_CLIENT_SECRET
-  const env = process.env.AMADEUS_ENV ?? "test"
-  if (id && secret) {
-    return { provider: new ResilientFlightProvider(new AmadeusFlightProvider(id, secret, env)), usingFixtures: false }
+  const apiKey = process.env.IGNAV_API_KEY
+  if (apiKey) {
+    return { provider: new ResilientFlightProvider(new IgnavFlightProvider(apiKey)), usingFixtures: false }
   }
   return { provider: new FixtureFlightProvider(), usingFixtures: true }
 }
 
-export function hasAmadeusKey(): boolean {
-  return Boolean(process.env.AMADEUS_CLIENT_ID && process.env.AMADEUS_CLIENT_SECRET)
+export function hasIgnavKey(): boolean {
+  return Boolean(process.env.IGNAV_API_KEY)
 }
 
 // True if a resilient provider fell back to fixtures during the run.

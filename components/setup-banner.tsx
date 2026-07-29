@@ -11,18 +11,16 @@ export function SetupBanner({ hasKey }: { hasKey: boolean }) {
       <AlertTitle>Demo mode — using sample fixtures</AlertTitle>
       <AlertDescription>
         <span>
-          Live pricing uses the Amadeus Flight Offers Search API. Add your credentials to{" "}
+          Live pricing uses the Ignav Flight API. Add your API key to{" "}
           <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">.env.local</code> and restart the dev server to run
           real searches:
         </span>
         <pre className="mt-1 w-full overflow-x-auto rounded-md bg-ink p-3 font-mono text-xs text-ink-foreground">
-          {`AMADEUS_CLIENT_ID=********
-AMADEUS_CLIENT_SECRET=********
-AMADEUS_ENV=test`}
+          {`IGNAV_API_KEY=********`}
         </pre>
         <span className="text-xs text-muted-foreground">
-          Get a free self-service key from the Amadeus for Developers portal. Until then, results below use deterministic sample
-          data so you can explore the UI.
+          Get a free API key from the Ignav dashboard at ignav.com. Until then, results below use deterministic sample data so
+          you can explore the UI.
         </span>
       </AlertDescription>
     </Alert>
