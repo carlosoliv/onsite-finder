@@ -268,7 +268,12 @@ export class IgnavFlightProvider implements FlightProvider {
     }
 
     const economy = await runCabin("economy")
-    const offers = economy.map((it) => mapIgnavItinerary(it, q.currency)).filter(Boolean) as FlightOffer[]
+    // The cabin is authoritative from the endpoint we queried, not from the
+    // itinerary payload: Ignav does not reliably echo cabin_class per itinerary,
+    // so trusting the response would mislabel premium-economy fares as economy.
+    const offers = economy
+      .map((it) => mapIgnavItinerary(it, q.currency, "ECONOMY"))
+      .filter(Boolean) as FlightOffer[]
 
     // Only spend an extra request on premium economy when the upgrade policy is
     // enabled AND the route's longest segment actually crosses the policy
@@ -279,7 +284,7 @@ export class IgnavFlightProvider implements FlightProvider {
     if (longHaul) {
       const premium = await runCabin("premium_economy")
       for (const it of premium) {
-        const m = mapIgnavItinerary(it, q.currency)
+        const m = mapIgnavItinerary(it, q.currency, "PREMIUM_ECONOMY")
         if (m) offers.push(m)
       }
     }
@@ -310,9 +315,16 @@ function ignavLegLongestSegmentHours(leg: any): number {
   return maxMin / 60
 }
 
-function mapIgnavItinerary(it: any, expectedCurrency: string): FlightOffer | null {
+function mapIgnavItinerary(
+  it: any,
+  expectedCurrency: string,
+  // The cabin we requested from the API. Ignav does not reliably return
+  // cabin_class per itinerary, so the requested cabin is authoritative; we only
+  // fall back to the response field when no forced cabin is supplied.
+  forcedCabin?: FlightOffer["cabin"],
+): FlightOffer | null {
   try {
-    const cabin = CABIN_FROM_IGNAV[String(it.cabin_class ?? "economy")] ?? "ECONOMY"
+    const cabin = forcedCabin ?? CABIN_FROM_IGNAV[String(it.cabin_class ?? "economy")] ?? "ECONOMY"
     const legs = [it.outbound, it.inbound].filter(Boolean)
     if (legs.length === 0) return null
     let stops = 0
