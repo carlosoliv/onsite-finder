@@ -27,6 +27,12 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"))
       }
 
+      // Proxies/dev servers often buffer small streamed chunks until enough bytes
+      // accumulate (or the stream closes), which would freeze the client's progress
+      // bar at 0% for the whole search. Prime the pipe with a padding line (which the
+      // client skips) to push past any minimum buffer so real events flush live.
+      controller.enqueue(encoder.encode(" ".repeat(2048) + "\n"))
+
       try {
         if (!origins || origins.length < 2) throw new Error("At least two cities are required.")
         if (!weeks || weeks.length < 1) throw new Error("At least one week is required.")
@@ -52,6 +58,8 @@ export async function POST(req: Request) {
       "Content-Type": "application/x-ndjson; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       "X-Content-Type-Options": "nosniff",
+      // Tell nginx/Vercel-style proxies not to buffer the streamed response.
+      "X-Accel-Buffering": "no",
     },
   })
 }
