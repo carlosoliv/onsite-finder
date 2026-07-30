@@ -83,15 +83,24 @@ function priceRoute(
 
   let best = bestEconomy
   if (qualifiesForUpgrade) {
-    // Only consider premium-economy fares that share the qualifying long leg
-    // (i.e. the same long-haul routing), so a short connecting premium fare can
-    // never be substituted in. If none exist, keep the economy fare — the
-    // provider simply had no premium seat for this routing.
-    const premiumLongHaul = offers.filter(
-      (o) => o.cabin === "PREMIUM_ECONOMY" && o.longestSegmentHours > threshold,
+    // Only upgrade to premium economy when it does NOT degrade the routing.
+    // Candidates must (a) still cross the threshold on their own longest leg —
+    // so the upgrade attaches to the genuine long-haul segment, not a short
+    // connection — and (b) have no MORE stops than the economy baseline. This
+    // prevents swapping a nonstop economy for a cheaper 2-stop premium fare
+    // when a direct flight exists.
+    const premiumCandidates = offers.filter(
+      (o) =>
+        o.cabin === "PREMIUM_ECONOMY" &&
+        o.longestSegmentHours > threshold &&
+        o.stops <= bestEconomy.stops,
     )
-    if (premiumLongHaul.length > 0) {
-      best = cheapest(applyMedianCeiling(premiumLongHaul, policy))
+    if (premiumCandidates.length > 0) {
+      // Prefer the fewest stops, then the cheapest fare within that routing, so
+      // the upgraded itinerary matches (or beats) the baseline's stop count.
+      const minStops = Math.min(...premiumCandidates.map((o) => o.stops))
+      const bestRouted = premiumCandidates.filter((o) => o.stops === minStops)
+      best = cheapest(applyMedianCeiling(bestRouted, policy))
     }
   }
 
