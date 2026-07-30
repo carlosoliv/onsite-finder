@@ -112,7 +112,7 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
       <div className="grid gap-6 lg:grid-cols-[minmax(360px,420px)_1fr]">
         {/* Configure rail */}
         <div className="flex flex-col gap-4">
-          <RosterCard origins={origins} setOrigins={setOrigins} />
+          <RosterCard origins={origins} setOrigins={setOrigins} hasKey={hasKey} />
           <WeeksCard weeks={weeks} setWeeks={setWeeks} />
           <RulesCard policy={policy} setPolicy={setPolicy} />
 
