@@ -1,18 +1,29 @@
+export interface Airport {
+  iata: string // e.g. "LGA"
+  name: string // short label, e.g. "LaGuardia"
+  lat: number
+  lng: number
+}
+
 export interface City {
   city: string
-  iata: string
+  iata: string // PRIMARY airport IATA; also the airport used when this city is a destination
   country: string
   currency: string
   lat: number
   lng: number
+  // Present only for metros with more than one usable airport. The primary
+  // airport (top-level iata/lat/lng) is expected to also appear in this list.
+  airports?: Airport[]
 }
 
 export interface OriginRow {
   id: string
   city: string // display name, e.g. "Dublin"
-  airport: string // IATA, e.g. "DUB"
+  airport: string // selected departure IATA, e.g. "DUB" (may be a non-primary airport)
   currency: string // ISO 4217 of the origin, e.g. "EUR"
   count: number // number of travelers based in this city
+  canHost: boolean // whether this city can host an onsite (i.e. be a destination)
 }
 
 export interface Week {

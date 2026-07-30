@@ -18,6 +18,7 @@ import {
   ignavApiCallCount,
   providerDegraded,
 } from "./flight-provider"
+import { primaryAirport } from "./cities"
 
 const FX = fxRates as Record<string, number>
 
@@ -132,7 +133,13 @@ export async function runSearch(
     ? { provider: providerOverride, usingFixtures: providerOverride.name === "fixtures" }
     : getFlightProvider()
 
-  const destinations = origins.map((o) => o.city)
+  // Only cities flagged as able to host an onsite are scored as destinations.
+  // Every city still contributes travelers (i.e. remains a possible origin).
+  const hostCities = origins.filter((o) => o.canHost !== false)
+  // When a city is a destination, travelers always arrive at its PRIMARY
+  // airport, independent of which airport that city's own team departs from.
+  const destAirportFor = (row: OriginRow) => primaryAirport(row.city) ?? row.airport
+  const destinations = hostCities.map((o) => o.city)
   const cache = new Map<string, FlightOffer[]>()
 
   // Build the ordered list of origin->dest lookups (per week, skipping same-city)
@@ -140,14 +147,14 @@ export async function runSearch(
   // matches the iteration order of the pricing loops below exactly.
   const plannedRouteList: PlannedRoute[] = []
   for (const w of weeks) {
-    for (const dest of origins) {
+    for (const dest of hostCities) {
       for (const origin of origins) {
         if (origin.city === dest.city) continue
         plannedRouteList.push({
           origin: origin.city,
           originAirport: origin.airport,
           destination: dest.city,
-          destAirport: dest.airport,
+          destAirport: destAirportFor(dest),
           weekId: w.id,
           weekLabel: w.label,
         })
@@ -197,7 +204,8 @@ export async function runSearch(
     const w = weeks[wi]
     console.log(`[v0] === week ${wi + 1}/${weeks.length} (${w.depart}) | ${Date.now() - runStart}ms elapsed ===`)
     const advanceWarning = daysUntil(w.depart) < policy.advancePurchaseDays
-    for (const dest of origins) {
+    for (const dest of hostCities) {
+      const destAirport = destAirportFor(dest)
       const byOrigin: OriginBreakdown[] = []
       const unroutable: string[] = []
       let totalUsd = 0
@@ -206,7 +214,7 @@ export async function runSearch(
         if (origin.city === dest.city) continue // already based there -> $0
         routeIndex++
         const cached = cache.has(
-          `${origin.airport}-${dest.airport}-${w.depart}-${w.return}-${policy.preferNonstop}-${policy.excludeRefundable}-${origin.currency}`,
+          `${origin.airport}-${destAirport}-${w.depart}-${w.return}-${policy.preferNonstop}-${policy.excludeRefundable}-${origin.currency}`,
         )
         onProgress?.({
           type: "route",
@@ -215,12 +223,12 @@ export async function runSearch(
           origin: origin.city,
           originAirport: origin.airport,
           destination: dest.city,
-          destAirport: dest.airport,
+          destAirport,
           weekId: w.id,
           weekLabel: w.label,
           cached,
         })
-        const offers = await search(origin.airport, dest.airport, w, origin.currency)
+        const offers = await search(origin.airport, destAirport, w, origin.currency)
         // In demo/fixture mode lookups resolve instantly; add a small pause so the
         // live progress feed is actually perceivable. No effect on the live API path.
         if (usingFixtures && !cached) await new Promise((r) => setTimeout(r, 70))
@@ -232,7 +240,7 @@ export async function runSearch(
           origin: origin.city,
           originAirport: origin.airport,
           destination: dest.city,
-          destAirport: dest.airport,
+          destAirport,
           weekId: w.id,
           weekLabel: w.label,
           cached,
