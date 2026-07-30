@@ -262,7 +262,7 @@ export function RosterCard({
   }
 
   return (
-    <Card>
+    <Card className="overflow-visible">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
