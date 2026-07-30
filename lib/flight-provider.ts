@@ -86,9 +86,17 @@ export class FixtureFlightProvider implements FlightProvider {
     if (!o || !d) return []
 
     const km = haversineKm(o, d)
-    // block hours for a single (longest) segment, ~800 km/h + fixed overhead
-    const longestSegmentHours = Math.round((km / 820 + 1.4) * 10) / 10
-    const longHaul = longestSegmentHours > 8
+    // Block hours for the NONSTOP routing (~820 km/h + fixed overhead). A
+    // connecting itinerary splits the journey into shorter individual segments,
+    // so its longest single segment is only a fraction of the nonstop duration.
+    // This mirrors reality: total trip time can be long while every leg is short.
+    const nonstopHours = Math.round((km / 820 + 1.4) * 10) / 10
+    const longestSegmentForStops = (stops: number) => {
+      if (stops <= 0) return nonstopHours
+      const frac = stops === 1 ? 0.6 : 0.45
+      return Math.round(nonstopHours * frac * 10) / 10
+    }
+    const longHaul = nonstopHours > 8
 
     // USD baseline fare then convert to origin currency at the end of algorithm.
     // Here we price directly in the origin currency for realism.
@@ -108,31 +116,26 @@ export class FixtureFlightProvider implements FlightProvider {
       { mult: 1.55, stops: 0, refundable: true },
     ]
     for (const v of variants) {
+      const legHours = longestSegmentForStops(v.stops)
       offers.push({
         cabin: "ECONOMY",
         price: toNative(baseUsd * v.mult),
         currency: q.currency,
         stops: v.stops,
-        longestSegmentHours,
+        longestSegmentHours: legHours,
         refundable: v.refundable,
       })
-    }
-    // Premium economy roughly 2.1x economy. Mirror the live provider: only
-    // synthesize these offers when the upgrade policy is enabled and the
-    // longest segment crosses the policy threshold, so the cabin exists exactly
-    // when policy could allow it.
-    if (q.longHaulUpgrade && longestSegmentHours > q.longHaulThresholdHours) {
-      for (const v of [
-        { mult: 2.0, stops: longHaul ? 1 : 0, refundable: false },
-        { mult: 2.3, stops: 0, refundable: false },
-        { mult: 2.9, stops: 0, refundable: true },
-      ]) {
+      // Premium economy (~2.1x economy) exists ONLY for a routing whose OWN
+      // longest individual segment crosses the policy threshold. A short
+      // connecting itinerary therefore has no premium fare, exactly like the
+      // live provider — so the upgrade can never attach to a non-long-haul leg.
+      if (q.longHaulUpgrade && legHours > q.longHaulThresholdHours) {
         offers.push({
           cabin: "PREMIUM_ECONOMY",
-          price: toNative(baseUsd * v.mult),
+          price: toNative(baseUsd * v.mult * 2.1),
           currency: q.currency,
           stops: v.stops,
-          longestSegmentHours,
+          longestSegmentHours: legHours,
           refundable: v.refundable,
         })
       }
@@ -143,7 +146,7 @@ export class FixtureFlightProvider implements FlightProvider {
       price: toNative(baseUsd * 4.5),
       currency: q.currency,
       stops: 0,
-      longestSegmentHours,
+      longestSegmentHours: nonstopHours,
       refundable: true,
     })
 

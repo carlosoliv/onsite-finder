@@ -26,12 +26,6 @@ function fxToUsd(currency: string): number {
   return FX[currency] ?? 1
 }
 
-function allowedCabin(offers: FlightOffer[], policy: PolicyConfig): Cabin {
-  if (!policy.longHaulUpgrade) return "ECONOMY"
-  const longLeg = offers.some((o) => o.longestSegmentHours > policy.longHaulThresholdHours)
-  return longLeg ? "PREMIUM_ECONOMY" : "ECONOMY"
-}
-
 function median(nums: number[]): number {
   if (nums.length === 0) return Number.POSITIVE_INFINITY
   const s = [...nums].sort((a, b) => a - b)
@@ -49,6 +43,20 @@ interface PricedRoute {
   flags: string[]
 }
 
+// Apply the median-fare ceiling within a single cabin's offers: keep only the
+// offers at or below the median price. No-op when the policy is disabled or the
+// list is empty.
+function applyMedianCeiling(offers: FlightOffer[], policy: PolicyConfig): FlightOffer[] {
+  if (!policy.medianCeiling || offers.length === 0) return offers
+  const ceil = median(offers.map((o) => o.price))
+  const capped = offers.filter((o) => o.price <= ceil)
+  return capped.length > 0 ? capped : offers
+}
+
+function cheapest(offers: FlightOffer[]): FlightOffer {
+  return offers.reduce((a, b) => (b.price < a.price ? b : a))
+}
+
 // Price a single (origin -> dest, week). Returns null if unroutable.
 function priceRoute(
   offers: FlightOffer[],
@@ -57,31 +65,35 @@ function priceRoute(
   advanceWarning: boolean,
 ): PricedRoute | null {
   if (offers.length === 0) return null
+  const threshold = policy.longHaulThresholdHours
 
-  // The target cabin for this route. allowedCabin returns PREMIUM_ECONOMY only
-  // when long-haul upgrades are enabled AND a segment exceeds the threshold,
-  // otherwise ECONOMY. When a route qualifies for the upgrade we deliberately
-  // book INTO premium economy (the traveler is entitled to it), rather than
-  // letting a cheaper economy fare win a "cheapest across cabins" comparison.
-  const cap = allowedCabin(offers, policy)
+  // 1. Establish the baseline itinerary the traveler would actually fly: the
+  //    cheapest economy fare (offers are already nonstop-preferred upstream).
+  //    Business/first fares are ignored here; economy is the entitlement floor.
+  const economyOffers = offers.filter((o) => o.cabin === "ECONOMY")
+  const baseOffers = economyOffers.length > 0 ? economyOffers : offers
+  const bestEconomy = cheapest(applyMedianCeiling(baseOffers, policy))
 
-  let eligible = offers.filter((o) => o.cabin === cap)
-  if (eligible.length === 0 && cap !== "ECONOMY") {
-    // Route qualified for the upgrade but the provider returned no offers in the
-    // upgrade cabin; fall back to economy so the route stays routable.
-    eligible = offers.filter((o) => o.cabin === "ECONOMY")
+  // 2. Long-haul is decided by THIS selected itinerary's longest INDIVIDUAL
+  //    segment, never the total trip duration and never some other unselected
+  //    routing on the same city pair. This matches the policy: "if any single
+  //    leg exceeds the threshold, premium economy is allowed for that route."
+  const qualifiesForUpgrade =
+    policy.longHaulUpgrade && bestEconomy.longestSegmentHours > threshold
+
+  let best = bestEconomy
+  if (qualifiesForUpgrade) {
+    // Only consider premium-economy fares that share the qualifying long leg
+    // (i.e. the same long-haul routing), so a short connecting premium fare can
+    // never be substituted in. If none exist, keep the economy fare — the
+    // provider simply had no premium seat for this routing.
+    const premiumLongHaul = offers.filter(
+      (o) => o.cabin === "PREMIUM_ECONOMY" && o.longestSegmentHours > threshold,
+    )
+    if (premiumLongHaul.length > 0) {
+      best = cheapest(applyMedianCeiling(premiumLongHaul, policy))
+    }
   }
-  if (eligible.length === 0) return null
-
-  // Median fare ceiling within the chosen cap cabin.
-  if (policy.medianCeiling) {
-    const capCabinPrices = eligible.filter((o) => o.cabin === cap).map((o) => o.price)
-    const ceil = median(capCabinPrices.length ? capCabinPrices : eligible.map((o) => o.price))
-    const capped = eligible.filter((o) => o.price <= ceil)
-    if (capped.length > 0) eligible = capped
-  }
-
-  const best = eligible.reduce((a, b) => (b.price < a.price ? b : a))
 
   const flags: string[] = []
   if (best.stops === 0) flags.push("nonstop")
