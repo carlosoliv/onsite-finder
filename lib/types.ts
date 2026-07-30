@@ -5,6 +5,17 @@ export interface Airport {
   lng: number
 }
 
+// A single airport match returned by the Ignav airport-lookup proxy. Used to
+// resolve cities/airports that are not in our built-in list. `currency` is
+// derived server-side from `country` (Ignav does not return it).
+export interface AirportSuggestion {
+  code: string // IATA, e.g. "AUS"
+  name: string // full airport name
+  city: string // city name, e.g. "Austin"
+  country: string // ISO 3166-1 alpha-2, e.g. "US"
+  currency: string // ISO 4217 derived from country, e.g. "USD"
+}
+
 export interface City {
   city: string
   iata: string // PRIMARY airport IATA; also the airport used when this city is a destination

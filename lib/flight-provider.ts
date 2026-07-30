@@ -1,6 +1,6 @@
 import "server-only"
 import citiesData from "@/data/cities.json"
-import type { City } from "./types"
+import type { AirportSuggestion, City } from "./types"
 
 const CITIES = citiesData as City[]
 
@@ -438,6 +438,85 @@ export function getFlightProvider(): { provider: FlightProvider; usingFixtures: 
 
 export function hasIgnavKey(): boolean {
   return Boolean(process.env.IGNAV_API_KEY)
+}
+
+/* ------------------------------------------------------------------ */
+/* Airport lookup — resolve cities/airports not in our built-in list.  */
+/* Docs: https://ignav.com/docs/airports  (GET /api/airports?q=...)    */
+/* ------------------------------------------------------------------ */
+
+// Map an airport's country to the origin currency we price in. Only currencies
+// present in the FX table are meaningful downstream; anything else falls back
+// to USD (which the FX table treats as the 1.0 baseline anyway).
+const COUNTRY_TO_CURRENCY: Record<string, string> = {
+  US: "USD",
+  GB: "GBP",
+  CA: "CAD",
+  SG: "SGD",
+  JP: "JPY",
+  AU: "AUD",
+  IN: "INR",
+  BR: "BRL",
+  AE: "AED",
+  // Eurozone members -> EUR
+  IE: "EUR",
+  DE: "EUR",
+  FR: "EUR",
+  ES: "EUR",
+  IT: "EUR",
+  NL: "EUR",
+  BE: "EUR",
+  AT: "EUR",
+  PT: "EUR",
+  FI: "EUR",
+  GR: "EUR",
+  LU: "EUR",
+  HR: "EUR",
+  SK: "EUR",
+  SI: "EUR",
+  EE: "EUR",
+  LV: "EUR",
+  LT: "EUR",
+  CY: "EUR",
+  MT: "EUR",
+}
+
+export function currencyForCountry(country: string | undefined): string {
+  return COUNTRY_TO_CURRENCY[(country ?? "").toUpperCase()] ?? "USD"
+}
+
+// Query Ignav's airport-search endpoint. Returns [] when no API key is set (the
+// caller keeps its local-list-only behavior in that case) or when the query is
+// too short. Each result is enriched with a derived origin currency.
+export async function searchIgnavAirports(q: string, limit = 8): Promise<AirportSuggestion[]> {
+  const apiKey = process.env.IGNAV_API_KEY
+  if (!apiKey) return []
+  const query = q.trim()
+  if (query.length < 2) return []
+
+  const capped = Math.min(20, Math.max(1, Math.floor(limit)))
+  const url = `${IGNAV_BASE}/airports?q=${encodeURIComponent(query)}&limit=${capped}`
+  try {
+    const res = await fetch(url, { headers: { "X-Api-Key": apiKey } })
+    if (!res.ok) {
+      console.log(`[v0] ignav airport lookup HTTP ${res.status} for "${query}"`)
+      return []
+    }
+    const raw = (await res.json()) as Array<{ code?: string; name?: string; city?: string; country?: string }>
+    if (!Array.isArray(raw)) return []
+    return raw
+      .filter((a) => a?.code)
+      .map((a) => ({
+        code: String(a.code),
+        name: String(a.name ?? a.code),
+        city: String(a.city ?? ""),
+        country: String(a.country ?? ""),
+        currency: currencyForCountry(a.country),
+      }))
+  } catch (err) {
+    console.log(`[v0] ignav airport lookup network error for "${query}":`, (err as Error)?.message)
+    return []
+  }
 }
 
 // True if a resilient provider fell back to fixtures during the run.
