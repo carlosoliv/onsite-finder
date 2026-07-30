@@ -6,12 +6,19 @@
   { "city": "Bengaluru", "iata": "BLR", "country": "IN", "currency": "INR", "lat": 13.2, "lng": 77.71 },
   { "city": "Berlin", "iata": "BER", "country": "DE", "currency": "EUR", "lat": 52.36, "lng": 13.5 },
   { "city": "Chicago", "iata": "ORD", "country": "US", "currency": "USD", "lat": 41.98, "lng": -87.9 },
+  { "city": "Denver", "iata": "DEN", "country": "US", "currency": "USD", "lat": 39.86, "lng": -104.67 },
   { "city": "Dublin", "iata": "DUB", "country": "IE", "currency": "EUR", "lat": 53.43, "lng": -6.27 },
   { "city": "London", "iata": "LHR", "country": "GB", "currency": "GBP", "lat": 51.47, "lng": -0.45 },
   { "city": "Melbourne", "iata": "MEL", "country": "AU", "currency": "AUD", "lat": -37.67, "lng": 144.84 },
+  { "city": "Melbourne (FL)", "iata": "MLB", "country": "US", "currency": "USD", "lat": 28.1, "lng": -80.65 },
   { "city": "Mexico City", "iata": "MEX", "country": "MX", "currency": "MXN", "lat": 19.44, "lng": -99.07 },
   { "city": "New York", "iata": "JFK", "country": "US", "currency": "USD", "lat": 40.64, "lng": -73.78 },
+  { "city": "Northwest Arkansas", "iata": "XNA", "country": "US", "currency": "USD", "lat": 36.28, "lng": -94.31 },
+  { "city": "Oakland", "iata": "OAK", "country": "US", "currency": "USD", "lat": 37.71, "lng": -122.22 },
+  { "city": "Orlando", "iata": "MCO", "country": "US", "currency": "USD", "lat": 28.43, "lng": -81.31 },
   { "city": "Paris", "iata": "CDG", "country": "FR", "currency": "EUR", "lat": 49.01, "lng": 2.55 },
+  { "city": "Philadelphia", "iata": "PHL", "country": "US", "currency": "USD", "lat": 39.87, "lng": -75.24 },
+  { "city": "Phoenix", "iata": "PHX", "country": "US", "currency": "USD", "lat": 33.43, "lng": -112.01 },
   { "city": "Prague", "iata": "PRG", "country": "CZ", "currency": "CZK", "lat": 50.1, "lng": 14.26 },
   { "city": "San Francisco", "iata": "SFO", "country": "US", "currency": "USD", "lat": 37.62, "lng": -122.38 },
   { "city": "São Paulo", "iata": "GRU", "country": "BR", "currency": "BRL", "lat": -23.43, "lng": -46.47 },
@@ -20,5 +27,6 @@
   { "city": "Sydney", "iata": "SYD", "country": "AU", "currency": "AUD", "lat": -33.95, "lng": 151.18 },
   { "city": "Tallinn", "iata": "TLL", "country": "EE", "currency": "EUR", "lat": 59.41, "lng": 24.83 },
   { "city": "Tokyo", "iata": "NRT", "country": "JP", "currency": "JPY", "lat": 35.77, "lng": 140.39 },
-  { "city": "Toronto", "iata": "YYZ", "country": "CA", "currency": "CAD", "lat": 43.68, "lng": -79.63 }
+  { "city": "Toronto", "iata": "YYZ", "country": "CA", "currency": "CAD", "lat": 43.68, "lng": -79.63 },
+  { "city": "Vancouver", "iata": "YVR", "country": "CA", "currency": "CAD", "lat": 49.19, "lng": -123.18 }
 ]

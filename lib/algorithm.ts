@@ -163,13 +163,7 @@ export async function runSearch(
   let searchCount = 0
   let cacheHits = 0
 
-  const geoFor = (row: OriginRow) =>
-    typeof row.lat === "number" && typeof row.lng === "number" ? { lat: row.lat, lng: row.lng } : undefined
-
-  const search = async (origin: OriginRow, dest: OriginRow, w: Week) => {
-    const originAirport = origin.airport
-    const destAirport = dest.airport
-    const currency = origin.currency
+  const search = async (originAirport: string, destAirport: string, w: Week, currency: string) => {
     const key = `${originAirport}-${destAirport}-${w.depart}-${w.return}-${policy.preferNonstop}-${policy.excludeRefundable}-${currency}`
     if (cache.has(key)) {
       cacheHits++
@@ -190,8 +184,6 @@ export async function runSearch(
       excludeRefundable: policy.excludeRefundable,
       longHaulUpgrade: policy.longHaulUpgrade,
       longHaulThresholdHours: policy.longHaulThresholdHours,
-      originGeo: geoFor(origin),
-      destGeo: geoFor(dest),
     })
     console.log(`[v0] [${n}] done ${originAirport}->${destAirport} in ${Date.now() - t0}ms | ${offers.length} offers`)
     cache.set(key, offers)
@@ -228,7 +220,7 @@ export async function runSearch(
           weekLabel: w.label,
           cached,
         })
-        const offers = await search(origin, dest, w)
+        const offers = await search(origin.airport, dest.airport, w, origin.currency)
         // In demo/fixture mode lookups resolve instantly; add a small pause so the
         // live progress feed is actually perceivable. No effect on the live API path.
         if (usingFixtures && !cached) await new Promise((r) => setTimeout(r, 70))
