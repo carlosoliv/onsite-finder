@@ -13,6 +13,24 @@ export interface OriginRow {
   airport: string // IATA, e.g. "DUB"
   currency: string // ISO 4217 of the origin, e.g. "EUR"
   count: number // number of travelers based in this city
+  // Geo coordinates for the origin's primary airport. Present for cities in our
+  // built-in list and for cities resolved on the fly via the city resolver.
+  // Threaded to the pricing engine so resolved cities are routable in fixtures.
+  lat?: number
+  lng?: number
+  country?: string // ISO 3166-1 alpha-2, e.g. "IE"
+  resolved?: boolean // true when this city was resolved by the AI city search
+}
+
+// Result of resolving a free-typed city name into a routable city.
+export interface ResolvedCity {
+  found: boolean
+  city: string
+  iata: string
+  country: string
+  currency: string
+  lat: number
+  lng: number
 }
 
 export interface Week {

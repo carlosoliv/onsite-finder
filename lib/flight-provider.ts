@@ -22,6 +22,11 @@ export interface SearchQuery {
   currency: string // origin currency
   preferNonstop: boolean
   excludeRefundable: boolean
+  // Optional geo coordinates for origin/destination. Supplied for cities that
+  // are not in the built-in list (resolved on the fly) so the fixture pricing
+  // engine can still compute distance. The live provider ignores these.
+  originGeo?: { lat: number; lng: number }
+  destGeo?: { lat: number; lng: number }
   // Upgrade policy, threaded from PolicyConfig so the provider only spends an
   // extra request on (or synthesizes) premium economy when policy allows it.
   longHaulUpgrade: boolean
@@ -36,6 +41,13 @@ export interface FlightProvider {
 /* ------------------------------------------------------------------ */
 /* Geo helpers                                                         */
 /* ------------------------------------------------------------------ */
+
+// Build a minimal City-shaped record from bare coordinates. Only lat/lng are
+// used by the distance math, so the other fields are placeholders.
+function geoStub(geo?: { lat: number; lng: number }): City | undefined {
+  if (!geo || typeof geo.lat !== "number" || typeof geo.lng !== "number") return undefined
+  return { city: "", iata: "", country: "", currency: "", lat: geo.lat, lng: geo.lng }
+}
 
 function haversineKm(a: City, b: City): number {
   const R = 6371
@@ -66,8 +78,10 @@ export class FixtureFlightProvider implements FlightProvider {
   readonly name = "fixtures"
 
   async search(q: SearchQuery): Promise<FlightOffer[]> {
-    const o = byIata.get(q.origin)
-    const d = byIata.get(q.dest)
+    // Prefer the built-in city record, but fall back to caller-supplied geo so
+    // cities resolved on the fly (not in cities.json) are still routable here.
+    const o = byIata.get(q.origin) ?? geoStub(q.originGeo)
+    const d = byIata.get(q.dest) ?? geoStub(q.destGeo)
     if (!o || !d) return []
 
     const km = haversineKm(o, d)
