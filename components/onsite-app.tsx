@@ -25,7 +25,14 @@ function seedRows(): OriginRow[] {
     ["New York", 5],
   ].map(([name, count]) => {
     const c = findCity(name as string)!
-    return { id: Math.random().toString(36).slice(2, 9), city: c.city, airport: c.iata, currency: c.currency, count: count as number }
+    return {
+      id: Math.random().toString(36).slice(2, 9),
+      city: c.city,
+      airport: c.iata,
+      currency: c.currency,
+      count: count as number,
+      canHost: true,
+    }
   })
 }
 
@@ -44,7 +51,8 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
   const [progress, setProgress] = useState<SearchProgressState>(EMPTY_PROGRESS)
 
   const validOrigins = useMemo(() => origins.filter((o) => o.airport && o.count > 0), [origins])
-  const canSearch = validOrigins.length >= 2 && weeks.length >= 1
+  const hostOrigins = useMemo(() => validOrigins.filter((o) => o.canHost), [validOrigins])
+  const canSearch = validOrigins.length >= 2 && hostOrigins.length >= 1 && weeks.length >= 1
 
   async function run() {
     if (!canSearch || loading) return
@@ -129,7 +137,9 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
             </Button>
             {!canSearch && (
               <p className="mt-2 text-center text-xs text-muted-foreground">
-                Add at least 2 cities and 1 week to search.
+                {hostOrigins.length < 1 && validOrigins.length >= 2
+                  ? "Mark at least 1 city as able to host an onsite."
+                  : "Add at least 2 cities and 1 week to search."}
               </p>
             )}
           </div>

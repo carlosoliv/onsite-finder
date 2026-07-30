@@ -12,7 +12,11 @@
   { "city": "Melbourne", "iata": "MEL", "country": "AU", "currency": "AUD", "lat": -37.67, "lng": 144.84 },
   { "city": "Melbourne (FL)", "iata": "MLB", "country": "US", "currency": "USD", "lat": 28.1, "lng": -80.65 },
   { "city": "Mexico City", "iata": "MEX", "country": "MX", "currency": "MXN", "lat": 19.44, "lng": -99.07 },
-  { "city": "New York", "iata": "JFK", "country": "US", "currency": "USD", "lat": 40.64, "lng": -73.78 },
+  { "city": "New York", "iata": "JFK", "country": "US", "currency": "USD", "lat": 40.64, "lng": -73.78, "airports": [
+    { "iata": "JFK", "name": "John F. Kennedy", "lat": 40.64, "lng": -73.78 },
+    { "iata": "LGA", "name": "LaGuardia", "lat": 40.78, "lng": -73.87 },
+    { "iata": "EWR", "name": "Newark", "lat": 40.69, "lng": -74.17 }
+  ] },
   { "city": "Northwest Arkansas", "iata": "XNA", "country": "US", "currency": "USD", "lat": 36.28, "lng": -94.31 },
   { "city": "Oakland", "iata": "OAK", "country": "US", "currency": "USD", "lat": 37.71, "lng": -122.22 },
   { "city": "Orlando", "iata": "MCO", "country": "US", "currency": "USD", "lat": 28.43, "lng": -81.31 },
@@ -20,7 +24,11 @@
   { "city": "Philadelphia", "iata": "PHL", "country": "US", "currency": "USD", "lat": 39.87, "lng": -75.24 },
   { "city": "Phoenix", "iata": "PHX", "country": "US", "currency": "USD", "lat": 33.43, "lng": -112.01 },
   { "city": "Prague", "iata": "PRG", "country": "CZ", "currency": "CZK", "lat": 50.1, "lng": 14.26 },
-  { "city": "San Francisco", "iata": "SFO", "country": "US", "currency": "USD", "lat": 37.62, "lng": -122.38 },
+  { "city": "San Francisco", "iata": "SFO", "country": "US", "currency": "USD", "lat": 37.62, "lng": -122.38, "airports": [
+    { "iata": "SFO", "name": "San Francisco Intl", "lat": 37.62, "lng": -122.38 },
+    { "iata": "OAK", "name": "Oakland", "lat": 37.71, "lng": -122.22 },
+    { "iata": "SJC", "name": "San Jose", "lat": 37.36, "lng": -121.93 }
+  ] },
   { "city": "São Paulo", "iata": "GRU", "country": "BR", "currency": "BRL", "lat": -23.43, "lng": -46.47 },
   { "city": "Seattle", "iata": "SEA", "country": "US", "currency": "USD", "lat": 47.45, "lng": -122.31 },
   { "city": "Singapore", "iata": "SIN", "country": "SG", "currency": "SGD", "lat": 1.36, "lng": 103.99 },

@@ -3,7 +3,22 @@ import citiesData from "@/data/cities.json"
 import type { City } from "./types"
 
 const CITIES = citiesData as City[]
-const byIata = new Map(CITIES.map((c) => [c.iata, c]))
+
+interface Geo {
+  lat: number
+  lng: number
+}
+
+// Index geo coordinates by IATA for BOTH each city's primary airport and any
+// alternate airports it lists. This keeps non-primary airports (e.g. LGA, EWR,
+// SJC) routable in fixture mode, where distance is computed from coordinates.
+const byIata = new Map<string, Geo>()
+for (const c of CITIES) {
+  byIata.set(c.iata, { lat: c.lat, lng: c.lng })
+  for (const a of c.airports ?? []) {
+    byIata.set(a.iata, { lat: a.lat, lng: a.lng })
+  }
+}
 
 export interface FlightOffer {
   cabin: "ECONOMY" | "PREMIUM_ECONOMY" | "BUSINESS" | "FIRST"
@@ -37,7 +52,7 @@ export interface FlightProvider {
 /* Geo helpers                                                         */
 /* ------------------------------------------------------------------ */
 
-function haversineKm(a: City, b: City): number {
+function haversineKm(a: Geo, b: Geo): number {
   const R = 6371
   const dLat = ((b.lat - a.lat) * Math.PI) / 180
   const dLng = ((b.lng - a.lng) * Math.PI) / 180
