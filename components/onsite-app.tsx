@@ -107,41 +107,7 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
 
   return (
     <div className="flex w-full flex-col">
-      {/* Sticky action toolbar */}
-      <div className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-semibold text-foreground">Plan your onsite</span>
-            <span className="text-xs text-muted-foreground">
-              {canSearch
-                ? `${validOrigins.length} cities · ${weeks.length} ${weeks.length === 1 ? "week" : "weeks"} ready to price`
-                : hostOrigins.length < 1 && validOrigins.length >= 2
-                  ? "Mark at least 1 city as able to host an onsite."
-                  : "Add at least 2 cities and 1 week to search."}
-            </span>
-          </div>
-          <Button
-            size="lg"
-            onClick={run}
-            disabled={!canSearch || loading}
-            className="gradient-brand h-11 w-full text-base font-semibold text-primary-foreground shadow-sm disabled:opacity-60 sm:w-auto sm:px-6"
-          >
-            {loading ? (
-              <>
-                <Plane className="animate-pulse" data-icon="inline-start" />
-                Pricing flights…
-              </>
-            ) : (
-              <>
-                <Search data-icon="inline-start" />
-                Find cheapest onsite
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-10">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-28 pt-6 sm:px-6 lg:pb-32 lg:pt-10">
         <SetupBanner hasKey={hasKey} />
 
         <div className="grid gap-6 lg:grid-cols-[minmax(360px,420px)_1fr]">
@@ -168,6 +134,35 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
           )}
           </div>
         </div>
+      </div>
+
+      {/* Floating primary action */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex flex-col items-center gap-2 px-4 pb-6">
+        {!canSearch && (
+          <p className="pointer-events-auto rounded-full bg-background/90 px-3 py-1 text-center text-xs text-muted-foreground shadow-sm backdrop-blur">
+            {hostOrigins.length < 1 && validOrigins.length >= 2
+              ? "Mark at least 1 city as able to host an onsite."
+              : "Add at least 2 cities and 1 week to search."}
+          </p>
+        )}
+        <Button
+          size="lg"
+          onClick={run}
+          disabled={!canSearch || loading}
+          className="gradient-brand pointer-events-auto h-12 rounded-full px-8 text-base font-semibold text-primary-foreground shadow-lg disabled:opacity-60"
+        >
+          {loading ? (
+            <>
+              <Plane className="animate-pulse" data-icon="inline-start" />
+              Pricing flights…
+            </>
+          ) : (
+            <>
+              <Search data-icon="inline-start" />
+              Find cheapest onsite
+            </>
+          )}
+        </Button>
       </div>
     </div>
   )
