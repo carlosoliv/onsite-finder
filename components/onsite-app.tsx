@@ -106,47 +106,54 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-10">
-      <SetupBanner hasKey={hasKey} />
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(360px,420px)_1fr]">
-        {/* Configure rail */}
-        <div className="flex flex-col gap-4">
-          <RosterCard origins={origins} setOrigins={setOrigins} hasKey={hasKey} />
-          <WeeksCard weeks={weeks} setWeeks={setWeeks} />
-          <RulesCard policy={policy} setPolicy={setPolicy} />
-
-          <div className="sticky bottom-4 z-10">
-            <Button
-              size="lg"
-              onClick={run}
-              disabled={!canSearch || loading}
-              className="gradient-brand h-12 w-full text-base font-semibold text-primary-foreground shadow-lg disabled:opacity-60"
-            >
-              {loading ? (
-                <>
-                  <Plane className="animate-pulse" data-icon="inline-start" />
-                  Pricing flights…
-                </>
-              ) : (
-                <>
-                  <Search data-icon="inline-start" />
-                  Find cheapest onsite
-                </>
-              )}
-            </Button>
-            {!canSearch && (
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                {hostOrigins.length < 1 && validOrigins.length >= 2
+    <div className="flex w-full flex-col">
+      {/* Sticky action toolbar */}
+      <div className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-semibold text-foreground">Plan your onsite</span>
+            <span className="text-xs text-muted-foreground">
+              {canSearch
+                ? `${validOrigins.length} cities · ${weeks.length} ${weeks.length === 1 ? "week" : "weeks"} ready to price`
+                : hostOrigins.length < 1 && validOrigins.length >= 2
                   ? "Mark at least 1 city as able to host an onsite."
                   : "Add at least 2 cities and 1 week to search."}
-              </p>
-            )}
+            </span>
           </div>
+          <Button
+            size="lg"
+            onClick={run}
+            disabled={!canSearch || loading}
+            className="gradient-brand h-11 w-full text-base font-semibold text-primary-foreground shadow-sm disabled:opacity-60 sm:w-auto sm:px-6"
+          >
+            {loading ? (
+              <>
+                <Plane className="animate-pulse" data-icon="inline-start" />
+                Pricing flights…
+              </>
+            ) : (
+              <>
+                <Search data-icon="inline-start" />
+                Find cheapest onsite
+              </>
+            )}
+          </Button>
         </div>
+      </div>
 
-        {/* Results */}
-        <div className="flex flex-col gap-4">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-10">
+        <SetupBanner hasKey={hasKey} />
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(360px,420px)_1fr]">
+          {/* Configure rail */}
+          <div className="flex flex-col gap-4">
+            <RosterCard origins={origins} setOrigins={setOrigins} hasKey={hasKey} />
+            <WeeksCard weeks={weeks} setWeeks={setWeeks} />
+            <RulesCard policy={policy} setPolicy={setPolicy} />
+          </div>
+
+          {/* Results */}
+          <div className="flex flex-col gap-4">
           {error && (
             <Alert variant="destructive">
               <TriangleAlert />
@@ -159,6 +166,7 @@ export function OnsiteApp({ hasKey }: { hasKey: boolean }) {
           ) : (
             <ResultsDashboard result={result} loading={false} />
           )}
+          </div>
         </div>
       </div>
     </div>
